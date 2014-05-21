@@ -48,7 +48,7 @@ class FulltextRow < ActiveRecord::Base
       types = {}
       rows.each {|r| types.include?(r.fulltextable_type) ? (types[r.fulltextable_type] << r.fulltextable_id) : (types[r.fulltextable_type] = [r.fulltextable_id])}
       objects = {}
-      types.each {|k, v| objects[k] = Object.const_get(k).find_all_by_id(v)}
+      types.each {|k, v| objects[k] = Object.const_get(k).find(v)}
       objects.each {|k, v| v.sort! {|x, y| types[k].index(x.id) <=> types[k].index(y.id)}}
 
       if defined?(WillPaginate) && options[:page]
