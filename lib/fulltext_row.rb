@@ -5,8 +5,6 @@
 # 2008-06-19
 #   Fixed a bug, see acts_as_fulltextable.rb
 class FulltextRow < ActiveRecord::Base
-  attr_accessible :fulltextable_type, :fulltextable_id, :value, :parent_id
-
   # If FULLTEXT_ROW_TABLE is set, use it as the table name
   begin
     set_table_name FULLTEXT_ROW_TABLE if Object.const_get('FULLTEXT_ROW_TABLE')
@@ -15,7 +13,7 @@ class FulltextRow < ActiveRecord::Base
   @@use_advanced_search = false
   @@use_and_search = false
   @@use_phrase_search = false
-  
+
   belongs_to  :fulltextable,
               :polymorphic => true
   validates_presence_of   :fulltextable_type, :fulltextable_id
@@ -43,8 +41,8 @@ class FulltextRow < ActiveRecord::Base
     options[:only] = [options[:only]] unless options[:only].nil? || options[:only].is_a?(Array)
     options[:only] = options[:only].map {|o| o.to_s.camelize}.uniq.compact unless options[:only].nil?
 
-    rows = raw_search(query, options[:only], options[:limit], 
-      options[:offset], options[:parent_id], options[:page], 
+    rows = raw_search(query, options[:only], options[:limit],
+      options[:offset], options[:parent_id], options[:page],
       options[:search_class])
     if options[:active_record]
       types = {}
@@ -69,20 +67,20 @@ class FulltextRow < ActiveRecord::Base
       return rows.map {|r| [r.fulltextable_type, r.fulltextable_id]}
     end
   end
-  
+
   # Use advanced search mechanism, instead of pure fulltext search.
   #
   def self.use_advanced_search!
     @@use_advanced_search = true
   end
-  
+
   # Force usage of AND search instead of OR. Works only when advanced search
   # is enabled.
   #
   def self.use_and_search!
     @@use_and_search = true
   end
-  
+
   # Force usage of phrase search instead of OR search. Doesn't work when
   # advanced search is enabled.
   #
@@ -112,7 +110,7 @@ private
         only_condition += " AND parent_id = #{parent_id.to_i}"
       end
     end
-    
+
     if @@use_advanced_search
       query_parts = query.gsub(/[\*\+\-]/, '').split(' ')
       if @@use_and_search
@@ -128,9 +126,9 @@ private
         matches << [query_parts.map {|w| "#{w}"}.join(' '), query_parts.size <= 3 ? 2.5 : 1] # match_some_exact
       end
       #matches << [search_query, 0.5] # match_some_wildcard
-      
+
       relevancy = matches.map {|m| sanitize_sql(["(match(`value`) against(? in boolean mode) * #{m[1]})", m[0]])}.join(' + ')
-      
+
       search_options = {
         :conditions => [("match(value) against(? in boolean mode)" + only_condition), search_query],
         :select => "fulltext_rows.fulltextable_type, fulltext_rows.fulltextable_id, #{relevancy} AS relevancy",
@@ -156,7 +154,7 @@ private
       end
       self.paginate(:all, search_options)
     else
-      self.find(:all, search_options.merge(:limit => limit, :offset => offset))
+      self.select(search_options[:select]).where(search_options[:conditions]).order(search_options[:order])
     end
   end
 end
