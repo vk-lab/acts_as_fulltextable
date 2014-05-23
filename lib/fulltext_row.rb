@@ -43,7 +43,7 @@ class FulltextRow < ActiveRecord::Base
 
     rows = raw_search(query, options[:only], options[:limit],
       options[:offset], options[:parent_id], options[:page],
-      options[:search_class])
+      options[:per_page])
     if options[:active_record]
       types = {}
       rows.each {|r| types.include?(r.fulltextable_type) ? (types[r.fulltextable_type] << r.fulltextable_id) : (types[r.fulltextable_type] = [r.fulltextable_id])}
@@ -97,7 +97,7 @@ private
   # * page: overrides limit and offset, only available with will_paginate.
   # * search_class: from what class should we take .per_page? Only with will_paginate
   #
-  def self.raw_search(query, only, limit, offset, parent_id = nil, page = nil, search_class = nil)
+  def self.raw_search(query, only, limit, offset, parent_id = nil, page = nil, per_page)
     unless only.nil? || only.empty?
       only_condition = " AND fulltextable_type IN (#{only.map {|c| (/\A\w+\Z/ === c.to_s) ? "'#{c.to_s}'" : nil}.uniq.compact.join(',')})"
     else
@@ -148,13 +148,10 @@ private
     end
 
     if defined?(WillPaginate) && page
-      search_options = search_options.merge(:page => page)
-      unless search_class.nil?
-        search_options = search_options.merge(:per_page => search_class.per_page)
-      end
-      self.paginate(:all, search_options)
+      self.where(search_options[:conditions]).paginate(:page => page, :per_page => per_page.nil? ? nil : per_page)
     else
       self.select(search_options[:select]).where(search_options[:conditions]).order(search_options[:order])
     end
+
   end
 end
