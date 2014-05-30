@@ -79,7 +79,7 @@ module ActsAsFulltextable
     def update_fulltext_record
       if eval self.class.fulltext_options[:conditions]
         if self.class.fulltext_options[:check_for_changes]
-          row = FulltextRow.find_by_fulltextable_type_and_fulltextable_id(self.class.to_s, self.id) 
+          row = FulltextRow.where('fulltextable_type = ?', self.class.to_s).where('fulltextable_id = ?', self.id)
           # If we haven't got a row for the record, yet, create it instead of updating it.
           if row.nil?
             self.create_fulltext_record
