@@ -4,6 +4,8 @@
 #   Patched by Artūras Šlajus <x11@arturaz.net> for will_paginate support
 # 2008-06-19
 #   Fixed a bug, see acts_as_fulltextable.rb
+# 2014-06
+#   Changed for Rails 4 and added few advanced options
 class FulltextRow < ActiveRecord::Base
   # If FULLTEXT_ROW_TABLE is set, use it as the table name
   begin
