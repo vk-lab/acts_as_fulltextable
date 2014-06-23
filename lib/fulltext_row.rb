@@ -18,9 +18,6 @@ class FulltextRow < ActiveRecord::Base
                           :scope => :fulltextable_type
   # Performs full-text search.
   # It takes four options:
-  # * limit: maximum number of rows to return (use 0 for all). Defaults to 10.
-  # * offset: offset to apply to query. Defaults to 0.
-  # * page: only available with will_paginate.
   # * active_record: wether a ActiveRecord objects should be returned or an Array of [class_name, id]
   # * only: limit search to these classes. Defaults to all classes. (should be a symbol or an Array of symbols)
   #
@@ -38,9 +35,11 @@ class FulltextRow < ActiveRecord::Base
     options[:only] = [options[:only]] unless options[:only].nil? || options[:only].is_a?(Array)
     options[:only] = options[:only].map {|o| o.to_s.camelize}.uniq.compact unless options[:only].nil?
 
-    rows = raw_search(query, options[:only], options[:limit],
-      options[:offset], options[:parent_id], options[:page],
-      options[:per_page])
+    rows = raw_search(query, options[:parent_id], options[:page], options[:per_page],
+                      :only => options[:only], :limit => options[:limit], :offset => options[:offset],
+                      :joins => options[:joins], :where => options[:where], :select => options[:select],
+                      :group => options[:group], :having => options[:having]
+    )
     if options[:active_record]
       types = {}
       rows.each {|r| types.include?(r.fulltextable_type) ? (types[r.fulltextable_type] << r.fulltextable_id) : (types[r.fulltextable_type] = [r.fulltextable_id])}
@@ -68,16 +67,21 @@ class FulltextRow < ActiveRecord::Base
 private
   # Performs a raw full-text search.
   # * query: string to be searched
-  # * only: limit search to these classes. Defaults to all classes.
-  # * limit: maximum number of rows to return (use 0 for all). Defaults to 10.
-  # * offset: offset to apply to query. Defaults to 0.
   # * parent_id: limit query to record with passed parent_id. An Array of ids is fine.
   # * page: overrides limit and offset, only available with will_paginate.
-  # * search_class: from what class should we take .per_page? Only with will_paginate
+  # * search_options:
+  #   * :only: limit search to these classes. Defaults to all classes.
+  #   * :limit: maximum number of rows to return (use 0 for all).
+  #   * :offset: offset to apply to query. Defaults to 0.
+  #   * :select: additional select statement
+  #   * :where: additional conditions
+  #   * :joins: statement to join additional table with conditions, eg. "INNER JOIN Person ON fulltext_rows.fulltextable_id = person.id"
+  #   * :group: group by
+  #   * :having: having
   #
-  def self.raw_search(query, only, limit, offset, parent_id = nil, page = nil, per_page)
-    unless only.nil? || only.empty?
-      only_condition = " AND fulltextable_type IN (#{only.map {|c| (/\A\w+\Z/ === c.to_s) ? "'#{c.to_s}'" : nil}.uniq.compact.join(',')})"
+  def self.raw_search(query, parent_id = nil, page = nil, per_page = nil, search_options = {})
+    unless search_options[:only].nil? || search_options[:only].empty?
+      only_condition = " AND fulltextable_type IN (#{search_options[:only].map {|c| (/\A\w+\Z/ === c.to_s) ? "'#{c.to_s}'" : nil}.uniq.compact.join(',')})"
     else
       only_condition = ''
     end
@@ -90,16 +94,20 @@ private
     end
 
     query = query.gsub(/(\S+)/, '\1*')
-    search_options = {
-      :conditions => [("match(value) against(? in boolean mode)" + only_condition), query],
-      :select => "fulltext_rows.fulltextable_type, fulltext_rows.fulltextable_id, #{sanitize_sql(["match(`value`) against(? in boolean mode) AS relevancy", query])}",
-      :order => "relevancy DESC, value ASC"
-    }
+    select = ""
+    select = ", #{search_options[:select]}" unless search_options[:select].nil? || search_options[:select].empty?
+    rows = self.select("fulltext_rows.fulltextable_type, fulltext_rows.fulltextable_id, #{sanitize_sql(["match(`value`) against(? in boolean mode) AS relevancy", query])} #{select}").
+      where([("match(value) against(? in boolean mode)" + only_condition), query]).
+      where(search_options[:where]).
+      joins(search_options[:joins]).
+      group(search_options[:group]).
+      having(search_options[:having]).
+      order("relevancy DESC, value ASC")
 
     if defined?(WillPaginate) && page
-      self.where(search_options[:conditions]).paginate(:page => page, :per_page => per_page.nil? ? nil : per_page)
+      self.paginate_by_sql(rows.to_sql, :page => page, :per_page=> per_page.nil? ? nil : per_page)
     else
-      self.select(search_options[:select]).where(search_options[:conditions]).order(search_options[:order]).limit(limit).offset(offset)
+      rows.limit(search_options[:limit]).offset(search_options[:offset])
     end
 
   end
