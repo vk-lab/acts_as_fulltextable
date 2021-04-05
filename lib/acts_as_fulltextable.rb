@@ -11,7 +11,7 @@ module ActsAsFulltextable
 	    # instance has changed before it actually updates the associated fulltext row.
 	    # If option :parent_id is not nulled, it is used as the field to be used as the parent of the record,
 	    # which is useful if you want to limit your queries to a scope.
-	    # If option :conditions is given, it should be a string containing a ruby expression that 
+	    # If option :conditions is given, it should be a string containing a ruby expression that
 	    # equates to true or nil/false. Records are tested with this condition and only those that return true
 	    # add/update the FullTextRow. A record returning false that is already in FullTextRow is removed.
 	    #
@@ -21,7 +21,7 @@ module ActsAsFulltextable
 	      configuration[:fields] = attr_names.flatten.uniq.compact
 	      class_attribute :fulltext_options
         self.fulltext_options = configuration
-        
+
         extend  FulltextableClassMethods
 	      include FulltextableInstanceMethods
 	      self.send('after_create', :create_fulltext_record)
@@ -29,9 +29,9 @@ module ActsAsFulltextable
 	      self.send('has_one', :fulltext_row, :as => :fulltextable, :dependent => :delete)
 	    end
   end
-  
+
   module FulltextableClassMethods
-    
+
     def fulltext_fields
       self.fulltext_options[:fields]
     end
@@ -56,44 +56,43 @@ module ActsAsFulltextable
       FulltextRow.search(query, options)
     end
   end
-  
+
   def self.included(receiver)
     receiver.extend(ClassMethods)
   end
-  
+
   module FulltextableInstanceMethods
     # Creates the fulltext_row record for self
     #
     def create_fulltext_record
       FulltextRow.create(:fulltextable_type => self.class.to_s, :fulltextable_id => self.id, :value => self.fulltext_value, :parent_id => self.parent_id_value) if eval self.class.fulltext_options[:conditions]
     end
-    
+
     # Returns the parent_id value or nil if it wasn't set.
     #
     def parent_id_value
       self.class.fulltext_options[:parent_id].nil? ? nil : self.send(self.class.fulltext_options[:parent_id])
     end
-    
+
     # Updates self's fulltext_row record
     #
     def update_fulltext_record
       if eval self.class.fulltext_options[:conditions]
         if self.class.fulltext_options[:check_for_changes]
-          row = FulltextRow.where('fulltextable_type = ?', self.class.to_s).where('fulltextable_id = ?', self.id)
+          row = FulltextRow.find_by("fulltextable_type = ? AND fulltextable_id = ?", self.class.to_s, self.id)
           # If we haven't got a row for the record, yet, create it instead of updating it.
           if row.nil?
             self.create_fulltext_record
             return
           end
         end
-        FulltextRow.where("fulltextable_type = ? AND fulltextable_id = ?", self.class.to_s, self.id).update_all({:value => self.fulltext_value, :parent_id => self.parent_id_value}) if !(self.class.fulltext_options[:check_for_changes]) || (row.value != self.fulltext_value) || (self.parent_id_value != row.parent_id)
+        FulltextRow.where("fulltextable_type = ? AND fulltextable_id = ?", self.class.to_s, self.id).update_all(value: self.fulltext_value, parent_id: self.parent_id_value) if !(self.class.fulltext_options[:check_for_changes]) || (row.value != self.fulltext_value) || (self.parent_id_value != row.parent_id)
       else
-
-        row = FulltextRow.find_by_fulltextable_type_and_fulltextable_id(self.class.to_s, self.id)
+        row = FulltextRow.find_by("fulltextable_type = ? AND fulltextable_id = ?", self.class.to_s, self.id)
         row.destroy unless row.nil?
       end
-    end  
-    
+    end
+
     # Returns self's value created by concatenating fulltext fields for its class
     #
     def fulltext_value
